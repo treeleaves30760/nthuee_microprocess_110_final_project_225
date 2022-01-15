@@ -1,0 +1,98 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              01/15/2022 22:59:59 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Program Files\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listing
+                    -s\main.lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <regx51.h>
+   2          
+   3          unsigned int dutytime = 45536; //65536-45536就是責任週期
+   4          unsigned int ton = 10000; //高電位比例=50%
+   5          unsigned int toff = 10000; //低電位比例=50%
+   6          unsigned int temp; //給計時器工作用
+   7          
+   8          void timer0_initialize(void) //初始化計時器0
+   9          
+  10          {
+  11   1      
+  12   1          EA = 0; //關閉中斷功能(所有中斷副程式失效)
+  13   1          IE |= 0x02; //開啟計時器中斷功能
+  14   1          TMOD |= 0x01; //設定計時器模式
+  15   1          temp = 65536 - dutytime; //設定中斷一次的時間(預設是dutytime)
+  16   1          TH0 = temp / 256; //填入高八位
+  17   1          TL0 = temp % 256; //填入低八位
+  18   1          TR0 = 1; //啟動計時器
+  19   1          EA = 1; //開啟中斷功能(中斷副程式可以執行)
+  20   1      }
+  21          
+  22          void timer0_isr(void) interrupt TF0_VECTOR using 1 //使用計時器中斷副程式產生PWM
+  23          {
+  24   1          if (P3_0 == 1) {
+  25   2              TR0 = 0;
+  26   2              temp = 65536 - toff;
+  27   2              TH0 = temp / 256;
+  28   2              TL0 = temp % 256;
+  29   2              TR0 = 1;
+  30   2              P3_0 = 0;
+  31   2          }
+  32   1          else {
+  33   2              TR0 = 0;
+  34   2              temp = 65536 - ton;
+  35   2              TH0 = temp / 256;
+  36   2              TL0 = temp % 256;
+  37   2              TR0 = 1;
+  38   2              P3_0 = 1;
+  39   2          }
+  40   1      }
+  41          
+  42          void main(void) {
+  43   1      
+  44   1          timer0_initialize(); //呼叫計時器初始化副程式
+  45   1      
+  46   1          //主程式中可直接改變ton或toff即可改變高電位跟低電位佔的比例
+  47   1      
+  48   1          while (1) {
+  49   2      
+  50   2              if (INT0 == 0) {
+  51   3                  ton = 2200; //2.2ms 左轉
+  52   3                  P1 = 0x01;
+  53   3              }
+  54   2      
+C51 COMPILER V9.60.0.0   MAIN                                                              01/15/2022 22:59:59 PAGE 2   
+
+  55   2              if (INT1 == 0) {
+  56   3                  ton = 1500; //1.5ms 中間
+  57   3                  P1 = 0x02;
+  58   3              }
+  59   2      
+  60   2              if (P2_0 == 0) {
+  61   3                  ton = 1200; //0.9ms 右轉  千萬別以為就3個角度0.5~2.2之間都可調角度
+  62   3                  P1 = 0x03;
+  63   3              }
+  64   2      
+  65   2              if (P2_1 == 0) {
+  66   3                  ton = 900; //0.9ms 右轉  千萬別以為就3個角度0.5~2.2之間都可調角度
+  67   3                  P1 = 0x04;
+  68   3              }
+  69   2      
+  70   2              toff = 20000 - ton;
+  71   2          }
+  72   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    153    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      8    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
