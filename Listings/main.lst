@@ -1,4 +1,4 @@
-C51 COMPILER V9.60.0.0   MAIN                                                              01/15/2022 22:59:59 PAGE 1   
+C51 COMPILER V9.60.0.0   MAIN                                                              01/20/2022 03:15:59 PAGE 1   
 
 
 C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
@@ -9,87 +9,317 @@ COMPILER INVOKED BY: C:\Program Files\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) B
 line level    source
 
    1          #include <regx51.h>
-   2          
-   3          unsigned int dutytime = 45536; //65536-45536就是責任週期
-   4          unsigned int ton = 10000; //高電位比例=50%
-   5          unsigned int toff = 10000; //低電位比例=50%
-   6          unsigned int temp; //給計時器工作用
-   7          
-   8          void timer0_initialize(void) //初始化計時器0
-   9          
-  10          {
-  11   1      
-  12   1          EA = 0; //關閉中斷功能(所有中斷副程式失效)
-  13   1          IE |= 0x02; //開啟計時器中斷功能
-  14   1          TMOD |= 0x01; //設定計時器模式
-  15   1          temp = 65536 - dutytime; //設定中斷一次的時間(預設是dutytime)
-  16   1          TH0 = temp / 256; //填入高八位
-  17   1          TL0 = temp % 256; //填入低八位
-  18   1          TR0 = 1; //啟動計時器
-  19   1          EA = 1; //開啟中斷功能(中斷副程式可以執行)
-  20   1      }
-  21          
-  22          void timer0_isr(void) interrupt TF0_VECTOR using 1 //使用計時器中斷副程式產生PWM
-  23          {
-  24   1          if (P3_0 == 1) {
-  25   2              TR0 = 0;
-  26   2              temp = 65536 - toff;
-  27   2              TH0 = temp / 256;
-  28   2              TL0 = temp % 256;
-  29   2              TR0 = 1;
-  30   2              P3_0 = 0;
-  31   2          }
-  32   1          else {
-  33   2              TR0 = 0;
-  34   2              temp = 65536 - ton;
-  35   2              TH0 = temp / 256;
-  36   2              TL0 = temp % 256;
-  37   2              TR0 = 1;
-  38   2              P3_0 = 1;
-  39   2          }
+   2          #define DECODE_MODE  0x09
+   3          #define INTENSITY    0x0A
+   4          #define SCAN_LIMIT   0x0B
+   5          #define SHUT_DOWN    0x0C
+   6          #define DISPLAY_TEST 0x0F
+   7          #define matrixnum       1
+   8          
+   9          #define DIN P3_4                 
+  10          #define LOAD P3_5      
+  11          #define CLK  P3_6 
+  12          
+  13          unsigned int dutytime = 45536; //65536-45536就是責任週期
+  14          unsigned int ton = 10000; //高電位比例=50%
+  15          unsigned int toff = 10000; //低電位比例=50%
+  16          unsigned int temp; //給計時器工作用
+  17          unsigned int time_count = 0;
+  18          
+  19          void sendbyte(unsigned char address,unsigned char dat) {
+  20   1          unsigned char i;
+  21   1          for (i=0;i<8;i++) {
+  22   2              CLK=0;
+  23   2              DIN=(address&0x80);
+  24   2              address<<=1;
+  25   2              CLK=1;
+  26   2          }
+  27   1          for (i=0;i<8;i++) {
+  28   2              CLK=0;
+  29   2              DIN=(dat&0x80);
+  30   2              dat<<=1;
+  31   2              CLK=1;
+  32   2          }
+  33   1      }
+  34          
+  35          void Write7219(unsigned char address,unsigned char dat) {
+  36   1          unsigned char cnt;
+  37   1          LOAD=0;
+  38   1          for(cnt=1;cnt<=matrixnum;cnt++) sendbyte(address,dat);
+  39   1          LOAD=1;                  
   40   1      }
   41          
-  42          void main(void) {
-  43   1      
-  44   1          timer0_initialize(); //呼叫計時器初始化副程式
-  45   1      
-  46   1          //主程式中可直接改變ton或toff即可改變高電位跟低電位佔的比例
-  47   1      
-  48   1          while (1) {
-  49   2      
-  50   2              if (INT0 == 0) {
-  51   3                  ton = 2200; //2.2ms 左轉
-  52   3                  P1 = 0x01;
-  53   3              }
-  54   2      
-C51 COMPILER V9.60.0.0   MAIN                                                              01/15/2022 22:59:59 PAGE 2   
+  42          void SSD_Initial(void) {
+  43   1          unsigned char i;
+  44   1          Write7219(SHUT_DOWN,0x01);
+  45   1          Write7219(DISPLAY_TEST,0x00);
+  46   1          Write7219(DECODE_MODE,0xff);
+  47   1          Write7219(SCAN_LIMIT,0x07);
+  48   1          Write7219(INTENSITY,0x00);
+  49   1          for(i=1;i<=8;i++) Write7219(i,0x0f);
+  50   1      }
+  51          
+  52          void delay_ms(int ms) {
+  53   1          unsigned int i;
+  54   1          char j;
+C51 COMPILER V9.60.0.0   MAIN                                                              01/20/2022 03:15:59 PAGE 2   
 
-  55   2              if (INT1 == 0) {
-  56   3                  ton = 1500; //1.5ms 中間
-  57   3                  P1 = 0x02;
-  58   3              }
-  59   2      
-  60   2              if (P2_0 == 0) {
-  61   3                  ton = 1200; //0.9ms 右轉  千萬別以為就3個角度0.5~2.2之間都可調角度
-  62   3                  P1 = 0x03;
-  63   3              }
-  64   2      
-  65   2              if (P2_1 == 0) {
-  66   3                  ton = 900; //0.9ms 右轉  千萬別以為就3個角度0.5~2.2之間都可調角度
-  67   3                  P1 = 0x04;
-  68   3              }
-  69   2      
-  70   2              toff = 20000 - ton;
-  71   2          }
-  72   1      }
+  55   1          for (i = 0; i < ms; i++) {
+  56   2              for (j = 0; j < 50; j++);
+  57   2          }
+  58   1      }
+  59          
+  60          //初始化計時器0
+  61          void timer0_initialize(void) {
+  62   1          EA = 0; //關閉中斷功能(所有中斷副程式失效)
+  63   1          IE |= 0x02; //開啟計時器中斷功能
+  64   1          TMOD |= 0x01; //設定計時器模式
+  65   1          temp = 65536 - dutytime; //設定中斷一次的時間(預設是dutytime)
+  66   1          TH0 = temp / 256; //填入高八位
+  67   1          TL0 = temp % 256; //填入低八位
+  68   1          TR0 = 1; //啟動計時器
+  69   1          EA = 1; //開啟中斷功能(中斷副程式可以執行)
+  70   1      }
+  71          
+  72          void timer0_isr(void) interrupt TF0_VECTOR using 1 //使用計時器中斷副程式產生PWM
+  73          {   
+  74   1          time_count++;
+  75   1          if (time_count == 100) {
+  76   2              time_count = 0;
+  77   2          }
+  78   1      
+  79   1          if (P3_0 == 1) {
+  80   2              TR0 = 0;
+  81   2              temp = 65536 - toff;
+  82   2              TH0 = temp / 256;
+  83   2              TL0 = temp % 256;
+  84   2              TR0 = 1;
+  85   2              P3_0 = 0;
+  86   2          } else {
+  87   2              TR0 = 0;
+  88   2              temp = 65536 - ton;
+  89   2              TH0 = temp / 256;
+  90   2              TL0 = temp % 256;
+  91   2              TR0 = 1;
+  92   2              P3_0 = 1;
+  93   2          }
+  94   1      }
+  95          
+  96          void main(void) {
+  97   1          char prebtn0 = 0, prebtn1 = 0, prebtn2 = 0, prebtn3 = 0;
+  98   1          char mode2_change_place = 0;
+  99   1          char open_close_time[6] = {0, 0, 0, 0, 0, 0}; //open: Hour, Minute, Second. close: Hour, Minute, Secon
+             -d.
+ 100   1          char mode = 1;
+ 101   1          char i;
+ 102   1          INT0 = 1; INT1 = 1; P2_0 = 1; P2_1 = 1;
+ 103   1          
+ 104   1          SSD_Initial();
+ 105   1          timer0_initialize(); //呼叫計時器初始化副程式
+ 106   1          //主程式中可直接改變ton或toff即可改變高電位跟低電位佔的比例
+ 107   1          while (1) {
+ 108   2              if (INT0 == 0 && prebtn0 == 1) {
+ 109   3                  delay_ms(10);
+ 110   3                  if (INT0 == 0) {
+ 111   4                      if (mode == 1) {
+ 112   5                          ton = 2200; //2.2ms 左轉
+ 113   5                      } else if (mode == 2) {
+ 114   5                          switch(mode2_change_place) {
+ 115   6                              case 0:
+C51 COMPILER V9.60.0.0   MAIN                                                              01/20/2022 03:15:59 PAGE 3   
+
+ 116   6                              case 3:
+ 117   6                                  if (++open_close_time[mode2_change_place] == 24) {
+ 118   7                                      open_close_time[mode2_change_place] = 0;
+ 119   7                                  }
+ 120   6                                  break;
+ 121   6                              default:
+ 122   6                                  if (++open_close_time[mode2_change_place] == 60) {
+ 123   7                                      open_close_time[mode2_change_place] = 0;
+ 124   7                                  }
+ 125   6                          }
+ 126   5                      } else if (mode == 3) {
+ 127   5      
+ 128   5                      }
+ 129   4                  }
+ 130   3              }
+ 131   2              if (INT1 == 0 && prebtn1 == 1) {
+ 132   3                  delay_ms(10);
+ 133   3                  if (INT1 == 0) {
+ 134   4                      if (mode == 1) {
+ 135   5                          ton = 1500; //1.5ms 中間
+ 136   5                      } else if (mode == 2) {
+ 137   5                          switch(mode2_change_place) {
+ 138   6                              case 0:
+ 139   6                              case 3:
+ 140   6                                  if (--open_close_time[mode2_change_place] <= 0) {
+ 141   7                                      open_close_time[mode2_change_place] = 23;
+ 142   7                                  }
+ 143   6                                  break;
+ 144   6                              default:
+ 145   6                                  if (--open_close_time[mode2_change_place] <= 0) {
+ 146   7                                      open_close_time[mode2_change_place] = 59;
+ 147   7                                  }
+ 148   6                          }
+ 149   5                      } else if (mode == 3) {
+ 150   5                          
+ 151   5                      }
+ 152   4                  }
+ 153   3              }
+ 154   2              if (P2_0 == 0 && prebtn2 == 1) {
+ 155   3                  delay_ms(10);
+ 156   3                  if (P2_0 == 0) {
+ 157   4                      if (mode == 1) {
+ 158   5                          mode = 2;
+ 159   5                      } else if (mode == 2) {
+ 160   5                          mode = 3;
+ 161   5                      } else if (mode == 3) {
+ 162   5                          mode = 1;
+ 163   5                      }
+ 164   4                  }
+ 165   3              }
+ 166   2              if (P2_1 == 0 && prebtn3 == 1) {
+ 167   3                  delay_ms(10);
+ 168   3                  if (P2_1 == 0) {
+ 169   4                      if (mode == 1) {
+ 170   5      
+ 171   5                      } else if (mode == 2) {
+ 172   5                          if (++mode2_change_place == 6) {
+ 173   6                              mode2_change_place = 0;
+ 174   6                          }
+ 175   5                      } else if (mode == 3) {
+ 176   5                          
+ 177   5                      }
+C51 COMPILER V9.60.0.0   MAIN                                                              01/20/2022 03:15:59 PAGE 4   
+
+ 178   4                  }
+ 179   3              }
+ 180   2      
+ 181   2      
+ 182   2              if (mode == 1) { // 一般模式
+ 183   3                  for (i = 2; i <= 8; i++) {
+ 184   4                      Write7219(i, 0x0f);
+ 185   4                  }
+ 186   3                  Write7219(1, 1);
+ 187   3              } else if (mode == 2) { // 設定自動時間模式
+ 188   3                  if (mode2_change_place < 3) {
+ 189   4                      if (mode2_change_place == 0) {
+ 190   5                          if (time_count >= 50) {
+ 191   6                              Write7219(8, open_close_time[0] / 10);
+ 192   6                              Write7219(7, open_close_time[0] % 10); 
+ 193   6                          } else {
+ 194   6                              Write7219(8, 0x0f);
+ 195   6                              Write7219(7, 0x0f); 
+ 196   6                          }
+ 197   5                          Write7219(6, open_close_time[1] / 10);
+ 198   5                          Write7219(5, open_close_time[1] % 10);
+ 199   5                          Write7219(4, open_close_time[2] / 10);
+ 200   5                          Write7219(3, open_close_time[2] % 10);
+ 201   5                      } else if (mode2_change_place == 1) {
+ 202   5                          if (time_count >= 50) {
+ 203   6                              Write7219(6, open_close_time[1] / 10);
+ 204   6                              Write7219(5, open_close_time[1] % 10);
+ 205   6                          } else {
+ 206   6                              Write7219(6, 0x0f);
+ 207   6                              Write7219(5, 0x0f); 
+ 208   6                          }
+ 209   5                          Write7219(8, open_close_time[0] / 10);
+ 210   5                          Write7219(7, open_close_time[0] % 10); 
+ 211   5                          Write7219(4, open_close_time[2] / 10);
+ 212   5                          Write7219(3, open_close_time[2] % 10);
+ 213   5                      } else if (mode2_change_place == 2) {
+ 214   5                          if (time_count >= 50) {
+ 215   6                              Write7219(4, open_close_time[2] / 10);
+ 216   6                              Write7219(3, open_close_time[2] % 10);
+ 217   6                          } else {
+ 218   6                              Write7219(4, 0x0f);
+ 219   6                              Write7219(3, 0x0f); 
+ 220   6                          }
+ 221   5                          Write7219(6, open_close_time[1] / 10);
+ 222   5                          Write7219(5, open_close_time[1] % 10);
+ 223   5                          Write7219(8, open_close_time[0] / 10);
+ 224   5                          Write7219(7, open_close_time[0] % 10); 
+ 225   5                      }
+ 226   4                      Write7219(2, 1);
+ 227   4                  } else {
+ 228   4                      if (mode2_change_place == 3) {
+ 229   5                          if (time_count >= 50) {
+ 230   6                              Write7219(8, open_close_time[3] / 10);
+ 231   6                              Write7219(7, open_close_time[3] % 10); 
+ 232   6                          } else {
+ 233   6                              Write7219(8, 0x0f);
+ 234   6                              Write7219(7, 0x0f); 
+ 235   6                          }
+ 236   5                          Write7219(6, open_close_time[4] / 10);
+ 237   5                          Write7219(5, open_close_time[4] % 10);
+ 238   5                          Write7219(4, open_close_time[5] / 10);
+ 239   5                          Write7219(3, open_close_time[5] % 10);
+C51 COMPILER V9.60.0.0   MAIN                                                              01/20/2022 03:15:59 PAGE 5   
+
+ 240   5                      } else if (mode2_change_place == 4) {
+ 241   5                          if (time_count >= 50) {
+ 242   6                              Write7219(6, open_close_time[4] / 10);
+ 243   6                              Write7219(5, open_close_time[4] % 10);
+ 244   6                          } else {
+ 245   6                              Write7219(6, 0x0f);
+ 246   6                              Write7219(5, 0x0f); 
+ 247   6                          }
+ 248   5                          Write7219(8, open_close_time[3] / 10);
+ 249   5                          Write7219(7, open_close_time[3] % 10); 
+ 250   5                          Write7219(4, open_close_time[5] / 10);
+ 251   5                          Write7219(3, open_close_time[5] % 10);
+ 252   5                      } else if (mode2_change_place == 5) {
+ 253   5                          if (time_count >= 50) {
+ 254   6                              Write7219(4, open_close_time[5] / 10);
+ 255   6                              Write7219(3, open_close_time[5] % 10);
+ 256   6                          } else {
+ 257   6                              Write7219(4, 0x0f);
+ 258   6                              Write7219(3, 0x0f); 
+ 259   6                          }
+ 260   5                          Write7219(5, open_close_time[4] % 10);
+ 261   5                          Write7219(6, open_close_time[4] / 10);
+ 262   5                          Write7219(7, open_close_time[3] % 10); 
+ 263   5                          Write7219(8, open_close_time[3] / 10);
+ 264   5                      }
+ 265   4                      Write7219(2, 2);
+ 266   4                  }
+ 267   3                  Write7219(1, 2);
+ 268   3              } else if (mode == 3) {
+ 269   3                  for (i = 2; i <= 8; i++) {
+ 270   4                      Write7219(i, 0x0f);
+ 271   4                  }
+ 272   3                  Write7219(1, 3);
+ 273   3              }
+ 274   2      
+ 275   2              // if (P2_0 == 0) {
+ 276   2              //     ton = 1200; //0.9ms 右轉  千萬別以為就3個角度0.5~2.2之間都可調角度
+ 277   2              //     P1 = 0x03;
+ 278   2              // }
+ 279   2      
+ 280   2              // if (P2_1 == 0) {
+ 281   2              //     ton = 900; //0.9ms 右轉  千萬別以為就3個角度0.5~2.2之間都可調角度
+ 282   2              //     P1 = 0x04;
+ 283   2              // }
+ 284   2      
+ 285   2              toff = 20000 - ton;
+ 286   2              prebtn0 = INT0;
+ 287   2              prebtn1 = INT1;
+ 288   2              prebtn2 = P2_0;
+ 289   2              prebtn3 = P2_1;
+ 290   2              delay_ms(20);
+ 291   2              P1 = prebtn0 + prebtn1 * 2 + prebtn2 * 4 + prebtn3 * 8 + 0xf0;
+ 292   2          }
+ 293   1      }
 
 
 MODULE INFORMATION:   STATIC OVERLAYABLE
-   CODE SIZE        =    153    ----
-   CONSTANT SIZE    =   ----    ----
+   CODE SIZE        =   1533    ----
+   CONSTANT SIZE    =      6    ----
    XDATA SIZE       =   ----    ----
    PDATA SIZE       =   ----    ----
-   DATA SIZE        =      8    ----
+   DATA SIZE        =     10      13
+C51 COMPILER V9.60.0.0   MAIN                                                              01/20/2022 03:15:59 PAGE 6   
+
    IDATA SIZE       =   ----    ----
    BIT SIZE         =   ----    ----
 END OF MODULE INFORMATION.
