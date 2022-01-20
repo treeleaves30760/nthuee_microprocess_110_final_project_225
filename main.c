@@ -10,11 +10,14 @@
 #define LOAD P3_5      
 #define CLK  P3_6 
 
-unsigned int dutytime = 45536; //65536-45536就是責任週期
-unsigned int ton = 10000; //高電位比例=50%
-unsigned int toff = 10000; //低電位比例=50%
+unsigned int dutytime = 35536; //65536-45536就是責任週期
+unsigned int ton = 15000; //高電位比例=50%
+unsigned int toff = 15000; //低電位比例=50%
 unsigned int temp; //給計時器工作用
 unsigned int time_count = 0;
+unsigned char T_hour = 0, T_min = 0, T_sec = 0;
+unsigned char PWM_state = 0;
+unsigned char Action = 0; // 1: open, 2: close
 
 void sendbyte(unsigned char address,unsigned char dat) {
     unsigned char i;
@@ -57,40 +60,74 @@ void delay_ms(int ms) {
     }
 }
 
-//初始化計時器0
-void timer0_initialize(void) {
-    EA = 0; //關閉中斷功能(所有中斷副程式失效)
-    IE |= 0x02; //開啟計時器中斷功能
-    TMOD |= 0x01; //設定計時器模式
+//初始化計時器
+void time_initial(void) {
+    TMOD = 0x11;  // Set Timer 1 to  mode 0 & Timer 0 mode 1. (16-bit timer)
+    IE|=0x02; //開啟計時器中斷功能
     temp = 65536 - dutytime; //設定中斷一次的時間(預設是dutytime)
     TH0 = temp / 256; //填入高八位
     TL0 = temp % 256; //填入低八位
-    TR0 = 1; //啟動計時器
-    EA = 1; //開啟中斷功能(中斷副程式可以執行)
+    TH1 = (65536-1000) / 256;   // Load initial higher 8 bits into Timer 1
+    TL1 = (65536-1000) % 256;   // Load initial lower 8 bits into Timer 1
+    EA = 1;                // Enable all interrupt
+    ET0 = 1;            // Enable Timer 0 interrupt
+    TR0 = 1;            // Start Timer 0
+    ET1 = 1;            // Enable Timer 1 interrupt
+    TR1 = 1;             // Start Timer 1
 }
 
 void timer0_isr(void) interrupt TF0_VECTOR using 1 //使用計時器中斷副程式產生PWM
-{   
-    time_count++;
-    if (time_count == 100) {
-        time_count = 0;
-    }
-
-    if (P3_0 == 1) {
-        TR0 = 0;
+{
+    if (PWM_state == 1) {
         temp = 65536 - toff;
         TH0 = temp / 256;
         TL0 = temp % 256;
-        TR0 = 1;
-        P3_0 = 0;
+        if (Action == 1) {
+            P2_7 = 0;
+        } else if (Action == 2) {
+            P2_6 = 0;
+        }
+        PWM_state = 0;
+        P1 = 0x0f;
     } else {
-        TR0 = 0;
         temp = 65536 - ton;
         TH0 = temp / 256;
         TL0 = temp % 256;
-        TR0 = 1;
-        P3_0 = 1;
+        if (Action == 1) {
+            P2_7 = 1;
+        } else if (Action == 2) {
+            P2_6 = 1;
+        }
+        PWM_state = 1;
+        P1 = 0xf0;
     }
+}
+
+void time_count_add(void) interrupt 3
+{   // 10ms
+    TH1 = (65536 - 10000) / 256;
+    TL1 = (65536 - 10000) % 256; 
+    time_count++;
+    if (time_count == 100) {
+        time_count = 0;
+        if (++T_sec == 60) {
+            T_sec = 0;
+            if (++T_min == 60) {
+                T_min = 0;
+                if (++T_hour == 24) {
+                    T_hour = 0;
+                }
+            }
+        }
+    }
+}
+
+// 1: open, 2: close
+void server_action(int act) {
+    Action = act;
+    ton = 2100; //2.2ms 左轉
+    delay_ms(1000);
+    ton = 1500;
 }
 
 void main(void) {
@@ -98,18 +135,19 @@ void main(void) {
     char mode2_change_place = 0;
     char open_close_time[6] = {0, 0, 0, 0, 0, 0}; //open: Hour, Minute, Second. close: Hour, Minute, Second.
     char mode = 1;
-    char i;
     INT0 = 1; INT1 = 1; P2_0 = 1; P2_1 = 1;
-    
+    P1 = 0x0f;
+    ton = 1500;
+    toff = 30000 - 1500;
     SSD_Initial();
-    timer0_initialize(); //呼叫計時器初始化副程式
+    time_initial();//呼叫計時器初始化副程式
     //主程式中可直接改變ton或toff即可改變高電位跟低電位佔的比例
     while (1) {
         if (INT0 == 0 && prebtn0 == 1) {
             delay_ms(10);
             if (INT0 == 0) {
-                if (mode == 1) {
-                    ton = 2200; //2.2ms 左轉
+                if (mode == 1) { // 開燈
+                    server_action(1);
                 } else if (mode == 2) {
                     switch(mode2_change_place) {
                         case 0:
@@ -132,7 +170,7 @@ void main(void) {
             delay_ms(10);
             if (INT1 == 0) {
                 if (mode == 1) {
-                    ton = 1500; //1.5ms 中間
+                    server_action(2);
                 } else if (mode == 2) {
                     switch(mode2_change_place) {
                         case 0:
@@ -180,9 +218,13 @@ void main(void) {
 
 
         if (mode == 1) { // 一般模式
-            for (i = 2; i <= 8; i++) {
-                Write7219(i, 0x0f);
-            }
+            Write7219(8, Action);
+            Write7219(7, 0x0f);
+            Write7219(6, 0x0f);
+            Write7219(5, 0x0f);
+            Write7219(4, 0x0f);
+            Write7219(3, 0x0f);
+            Write7219(2, 0x0f);
             Write7219(1, 1);
         } else if (mode == 2) { // 設定自動時間模式
             if (mode2_change_place < 3) {
@@ -266,9 +308,13 @@ void main(void) {
             }
             Write7219(1, 2);
         } else if (mode == 3) {
-            for (i = 2; i <= 8; i++) {
-                Write7219(i, 0x0f);
-            }
+            Write7219(8, T_hour / 10);
+            Write7219(7, T_hour % 10);
+            Write7219(6, T_min / 10);
+            Write7219(5, T_min % 10);
+            Write7219(4, T_sec / 10);
+            Write7219(3, T_sec % 10);
+            Write7219(2, 0x0f);
             Write7219(1, 3);
         }
 
@@ -282,12 +328,12 @@ void main(void) {
         //     P1 = 0x04;
         // }
 
-        toff = 20000 - ton;
+        toff = 30000 - ton;
         prebtn0 = INT0;
         prebtn1 = INT1;
         prebtn2 = P2_0;
         prebtn3 = P2_1;
         delay_ms(20);
-        P1 = prebtn0 + prebtn1 * 2 + prebtn2 * 4 + prebtn3 * 8 + 0xf0;
+        // P1 = prebtn0 + prebtn1 * 2 + prebtn2 * 4 + prebtn3 * 8 + 0xf0;
     }
 }

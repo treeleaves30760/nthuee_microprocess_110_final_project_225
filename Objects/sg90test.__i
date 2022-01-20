@@ -1,0 +1,1 @@
+"sg90test.c" OPTIMIZE (8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\sg90test.lst) TABS (2) OBJECT(.\Objects\sg90test.obj)
