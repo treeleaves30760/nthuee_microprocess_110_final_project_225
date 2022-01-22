@@ -16,6 +16,7 @@ unsigned int ton = 15000; //高電位比例=50%
 unsigned int toff = 15000; //低電位比例=50%
 unsigned int temp; //給計時器工作用
 unsigned int time_count = 0;
+unsigned int ms1 = 908; // 透過修正timer1的時間修正系統性的時間計算誤差
 signed char T_hour = 0, T_min = 0, T_sec = 0;
 unsigned char PWM_state = 0;
 unsigned char Action = 0; // 1: open, 2: close
@@ -107,10 +108,10 @@ void timer0_isr(void) __interrupt TF0_VECTOR __using 1 {
 }
 
 void time_count_add(void) __interrupt 3 {   // 10ms
-    TH1 = (65536 - 10000) / 256;
-    TL1 = (65536 - 10000) % 256; 
+    TH1 = (65536 - 1000) / 256;
+    TL1 = (65536 - 1000) % 256; 
     time_count++;
-    if (time_count == 100) {
+    if (time_count == ms1) {
         time_count = 0;
         if (++T_sec == 60) {
             T_sec = 0;
@@ -124,6 +125,16 @@ void time_count_add(void) __interrupt 3 {   // 10ms
     }
 }
 
+void Write7219ALL(int pl8, int pl7, int pl6, int pl5, int pl4, int pl3, int pl2, int pl1) {
+    Write7219(8, pl8);
+    Write7219(7, pl7);
+    Write7219(6, pl6);
+    Write7219(5, pl5);
+    Write7219(4, pl4);
+    Write7219(3, pl3);
+    Write7219(2, pl2);
+    Write7219(1, pl1);
+}
 
 // 1: open, 2: close
 void server_action(int act) {
@@ -159,7 +170,6 @@ void main(void) {
     char mode2_change_place = 0;
     char open_close_time[6] = {8, 30, 0, 23, 30, 0}; //open: Hour, Minute, Second. close: Hour, Minute, Second.
     char mode = 1;
-    char BT_data;
     INT0 = 1; INT1 = 1; P2_0 = 1; P2_1 = 1;
     ton = 1500;
     toff = 30000 - 1500;
@@ -214,6 +224,8 @@ void main(void) {
                                 T_sec = 0;
                             }
                     }
+                } else if (mode == 5) {
+                    ms1++; // if time go too fast, then add ms1 to correct;
                 }
             }
         }
@@ -251,6 +263,8 @@ void main(void) {
                             T_sec = 59;
                         }
                     }
+                } else if (mode == 5) {
+                    ms1--; // if time go to slow substract to correct
                 }
             }
         }
@@ -264,6 +278,8 @@ void main(void) {
                 } else if (mode == 3) {
                     mode = 4;
                 } else if (mode == 4) {
+                    mode = 5;
+                } else if (mode == 5) {
                     mode = 1;
                 }
             }
@@ -289,14 +305,14 @@ void main(void) {
 
 
         if (mode == 1) { // 一般模式
-            for (i = 0; i <= 8; i++) {
+            for (i = 2; i <= 8; i++) {
                 Write7219(i, 0x0f);
             }
             Write7219(1, 1);
         } else if (mode == 2) { // 設定自動時間模式
             if (mode2_change_place < 3) {
                 if (mode2_change_place == 0) {
-                    if (time_count >= 50) {
+                    if (time_count >= 500) {
                         Write7219(8, open_close_time[0] / 10);
                         Write7219(7, open_close_time[0] % 10); 
                     } else {
@@ -308,7 +324,7 @@ void main(void) {
                     Write7219(4, open_close_time[2] / 10);
                     Write7219(3, open_close_time[2] % 10);
                 } else if (mode2_change_place == 1) {
-                    if (time_count >= 50) {
+                    if (time_count >= 500) {
                         Write7219(6, open_close_time[1] / 10);
                         Write7219(5, open_close_time[1] % 10);
                     } else {
@@ -320,7 +336,7 @@ void main(void) {
                     Write7219(4, open_close_time[2] / 10);
                     Write7219(3, open_close_time[2] % 10);
                 } else if (mode2_change_place == 2) {
-                    if (time_count >= 50) {
+                    if (time_count >= 500) {
                         Write7219(4, open_close_time[2] / 10);
                         Write7219(3, open_close_time[2] % 10);
                     } else {
@@ -335,7 +351,7 @@ void main(void) {
                 Write7219(2, 1);
             } else {
                 if (mode2_change_place == 3) {
-                    if (time_count >= 50) {
+                    if (time_count >= 500) {
                         Write7219(8, open_close_time[3] / 10);
                         Write7219(7, open_close_time[3] % 10); 
                     } else {
@@ -347,7 +363,7 @@ void main(void) {
                     Write7219(4, open_close_time[5] / 10);
                     Write7219(3, open_close_time[5] % 10);
                 } else if (mode2_change_place == 4) {
-                    if (time_count >= 50) {
+                    if (time_count >= 500) {
                         Write7219(6, open_close_time[4] / 10);
                         Write7219(5, open_close_time[4] % 10);
                     } else {
@@ -359,7 +375,7 @@ void main(void) {
                     Write7219(4, open_close_time[5] / 10);
                     Write7219(3, open_close_time[5] % 10);
                 } else if (mode2_change_place == 5) {
-                    if (time_count >= 50) {
+                    if (time_count >= 500) {
                         Write7219(4, open_close_time[5] / 10);
                         Write7219(3, open_close_time[5] % 10);
                     } else {
@@ -379,16 +395,37 @@ void main(void) {
             } else if (open_close_time[3] == T_hour && open_close_time[4] == T_min && open_close_time[5] == T_sec) {
                 server_action(2);
             }
-        } else if (mode == 3 || mode == 4) { // 顯示當前時間
-            Write7219(8, T_hour / 10);
-            Write7219(7, T_hour % 10);
-            Write7219(6, T_min / 10);
-            Write7219(5, T_min % 10);
-            Write7219(4, T_sec / 10);
-            Write7219(3, T_sec % 10);
-            if (mode == 3) Write7219(2, 0x0f);
-            else Write7219(2, 0x7E);
-            Write7219(1, mode);
+        } else if (mode == 3) { // 顯示當前時間
+            Write7219ALL(T_hour / 10, T_hour % 10, T_min / 10, T_min % 10, T_sec / 10, T_sec % 10, 0x0f, 3);
+        } else if (mode == 4) {
+            if (change_time == 0) {
+                if (time_count <= 500) {
+                    Write7219ALL(T_hour / 10, T_hour % 10, T_min / 10, T_min % 10, T_sec / 10, T_sec % 10, 0x0f, 4);
+                } else {
+                    Write7219ALL(0x0f, 0x0f, T_min / 10, T_min % 10, T_sec / 10, T_sec % 10, 0x0f, 4);
+                }
+            } else if (change_time == 1) {
+                if (time_count <= 500) {
+                    Write7219ALL(T_hour / 10, T_hour % 10, T_min / 10, T_min % 10, T_sec / 10, T_sec % 10, 0x0f, 4);
+                } else {
+                    Write7219ALL(T_hour / 10, T_hour % 10, 0x0f, 0x0f, T_sec / 10, T_sec % 10, 0x0f, 4);
+                }
+            } else if (change_time == 2) {
+                if (time_count <= 500) {
+                    Write7219ALL(T_hour / 10, T_hour % 10, T_min / 10, T_min % 10, T_sec / 10, T_sec % 10, 0x0f, 4);
+                } else {
+                    Write7219ALL(T_hour / 10, T_hour % 10, T_min / 10, T_min % 10, 0x0f, 0x0f, 0x0f, 4);
+                }
+            }
+        } else if (mode == 5) {
+            Write7219(8, ms1 / 10000);
+            Write7219(7, ms1 / 1000 % 10);
+            Write7219(6, ms1 / 100 % 10);
+            Write7219(5, ms1 / 10 % 10);
+            Write7219(4, ms1 % 10);
+            Write7219(3, 0x0f);
+            Write7219(2, 0x0f);
+            Write7219(1, 5);
         }
 
         toff = 30000 - ton;
