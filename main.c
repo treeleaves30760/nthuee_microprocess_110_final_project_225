@@ -16,7 +16,7 @@ unsigned int ton = 15000; //高電位比例=50%
 unsigned int toff = 15000; //低電位比例=50%
 unsigned int temp; //給計時器工作用
 unsigned int time_count = 0;
-unsigned int ms1 = 908; // 透過修正timer1的時間修正系統性的時間計算誤差
+unsigned int ms1 = 907; // 透過修正timer1的時間修正系統性的時間計算誤差
 signed char T_hour = 0, T_min = 0, T_sec = 0;
 unsigned char PWM_state = 0;
 unsigned char Action = 0; // 1: open, 2: close

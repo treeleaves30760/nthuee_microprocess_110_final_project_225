@@ -1,7 +1,7 @@
 ;--------------------------------------------------------
 ; File Created by SDCC : free open source ANSI-C Compiler
 ; Version 3.0.1 #6083 (Dec 17 2010) (MINGW32)
-; This file was generated Sat Jan 22 22:18:00 2022
+; This file was generated Sat Jan 22 23:47:24 2022
 ;--------------------------------------------------------
 	.module main
 	.optsdcc -mmcs51 --model-small
@@ -414,8 +414,8 @@ __interrupt_vect:
 	clr	a
 	mov	_time_count,a
 	mov	(_time_count + 1),a
-;	C:\HSU-PO~1\MICROP~1\FINAL_~1\main.c:19: unsigned int ms1 = 905; // 透過修正timer1的時間修正系統性的時間計算誤差
-	mov	_ms1,#0x89
+;	C:\HSU-PO~1\MICROP~1\FINAL_~1\main.c:19: unsigned int ms1 = 907; // 透過修正timer1的時間修正系統性的時間計算誤差
+	mov	_ms1,#0x8B
 	mov	(_ms1 + 1),#0x03
 ;	C:\HSU-PO~1\MICROP~1\FINAL_~1\main.c:20: signed char T_hour = 0, T_min = 0, T_sec = 0;
 	mov	_T_hour,#0x00
