@@ -1,4 +1,4 @@
-C51 COMPILER V9.60.0.0   MAIN                                                              01/20/2022 20:09:26 PAGE 1   
+C51 COMPILER V9.60.0.0   MAIN                                                              01/22/2022 13:17:02 PAGE 1   
 
 
 C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
@@ -28,344 +28,388 @@ line level    source
   18          unsigned char T_hour = 0, T_min = 0, T_sec = 0;
   19          unsigned char PWM_state = 0;
   20          unsigned char Action = 0; // 1: open, 2: close
-  21          
-  22          void sendbyte(unsigned char address,unsigned char dat) {
-  23   1          unsigned char i;
-  24   1          for (i=0;i<8;i++) {
-  25   2              CLK=0;
-  26   2              DIN=(address&0x80);
-  27   2              address<<=1;
-  28   2              CLK=1;
-  29   2          }
-  30   1          for (i=0;i<8;i++) {
-  31   2              CLK=0;
-  32   2              DIN=(dat&0x80);
-  33   2              dat<<=1;
-  34   2              CLK=1;
-  35   2          }
-  36   1      }
-  37          
-  38          void Write7219(unsigned char address,unsigned char dat) {
-  39   1          unsigned char cnt;
-  40   1          LOAD=0;
-  41   1          for(cnt=1;cnt<=matrixnum;cnt++) sendbyte(address,dat);
-  42   1          LOAD=1;                  
-  43   1      }
-  44          
-  45          void SSD_Initial(void) {
-  46   1          unsigned char i;
-  47   1          Write7219(SHUT_DOWN,0x01);
-  48   1          Write7219(DISPLAY_TEST,0x00);
-  49   1          Write7219(DECODE_MODE,0xff);
-  50   1          Write7219(SCAN_LIMIT,0x07);
-  51   1          Write7219(INTENSITY,0x00);
-  52   1          for(i=1;i<=8;i++) Write7219(i,0x0f);
-  53   1      }
-  54          
-C51 COMPILER V9.60.0.0   MAIN                                                              01/20/2022 20:09:26 PAGE 2   
+  21          unsigned char change_time = 0;
+  22          
+  23          void sendbyte(unsigned char address,unsigned char dat) {
+  24   1          unsigned char i;
+  25   1          for (i=0;i<8;i++) {
+  26   2              CLK=0;
+  27   2              DIN=(address&0x80);
+  28   2              address<<=1;
+  29   2              CLK=1;
+  30   2          }
+  31   1          for (i=0;i<8;i++) {
+  32   2              CLK=0;
+  33   2              DIN=(dat&0x80);
+  34   2              dat<<=1;
+  35   2              CLK=1;
+  36   2          }
+  37   1      }
+  38          
+  39          void Write7219(unsigned char address,unsigned char dat) {
+  40   1          unsigned char cnt;
+  41   1          LOAD=0;
+  42   1          for(cnt=1;cnt<=matrixnum;cnt++) sendbyte(address,dat);
+  43   1          LOAD=1;                  
+  44   1      }
+  45          
+  46          void SSD_Initial(void) {
+  47   1          unsigned char i;
+  48   1          Write7219(SHUT_DOWN,0x01);
+  49   1          Write7219(DISPLAY_TEST,0x00);
+  50   1          Write7219(DECODE_MODE,0xff);
+  51   1          Write7219(SCAN_LIMIT,0x07);
+  52   1          Write7219(INTENSITY,0x00);
+  53   1          for(i=1;i<=8;i++) Write7219(i,0x0f);
+  54   1      }
+C51 COMPILER V9.60.0.0   MAIN                                                              01/22/2022 13:17:02 PAGE 2   
 
-  55          void delay_ms(int ms) {
-  56   1          unsigned int i;
-  57   1          char j;
-  58   1          for (i = 0; i < ms; i++) {
-  59   2              for (j = 0; j < 50; j++);
-  60   2          }
-  61   1      }
-  62          
-  63          //初始化計時器
-  64          void time_initial(void) {
-  65   1          TMOD = 0x11;  // Set Timer 1 to  mode 0 & Timer 0 mode 1. (16-bit timer)
-  66   1          IE|=0x02; //開啟計時器中斷功能
-  67   1          temp = 65536 - dutytime; //設定中斷一次的時間(預設是dutytime)
-  68   1          TH0 = temp / 256; //填入高八位
-  69   1          TL0 = temp % 256; //填入低八位
-  70   1          TH1 = (65536-1000) / 256;   // Load initial higher 8 bits into Timer 1
-  71   1          TL1 = (65536-1000) % 256;   // Load initial lower 8 bits into Timer 1
-  72   1          EA = 1;                // Enable all interrupt
-  73   1          ET0 = 1;            // Enable Timer 0 interrupt
-  74   1          TR0 = 1;            // Start Timer 0
-  75   1          ET1 = 1;            // Enable Timer 1 interrupt
-  76   1          TR1 = 1;             // Start Timer 1
-  77   1      }
-  78          
-  79          void timer0_isr(void) interrupt TF0_VECTOR using 1 //使用計時器中斷副程式產生PWM
-  80          {
-  81   1          if (PWM_state == 1) {
-  82   2              temp = 65536 - toff;
-  83   2              TH0 = temp / 256;
-  84   2              TL0 = temp % 256;
-  85   2              if (Action == 1) {
-  86   3                  P2_7 = 0;
-  87   3              } else if (Action == 2) {
-  88   3                  P2_6 = 0;
-  89   3              }
-  90   2              PWM_state = 0;
-  91   2              P1 = 0x0f;
-  92   2          } else {
-  93   2              temp = 65536 - ton;
-  94   2              TH0 = temp / 256;
-  95   2              TL0 = temp % 256;
-  96   2              if (Action == 1) {
-  97   3                  P2_7 = 1;
-  98   3              } else if (Action == 2) {
-  99   3                  P2_6 = 1;
- 100   3              }
- 101   2              PWM_state = 1;
- 102   2              P1 = 0xf0;
- 103   2          }
- 104   1      }
- 105          
- 106          void time_count_add(void) interrupt 3
- 107          {   // 10ms
- 108   1          TH1 = (65536 - 10000) / 256;
- 109   1          TL1 = (65536 - 10000) % 256; 
- 110   1          time_count++;
- 111   1          if (time_count == 100) {
- 112   2              time_count = 0;
- 113   2              if (++T_sec == 60) {
- 114   3                  T_sec = 0;
- 115   3                  if (++T_min == 60) {
- 116   4                      T_min = 0;
-C51 COMPILER V9.60.0.0   MAIN                                                              01/20/2022 20:09:26 PAGE 3   
+  55          
+  56          void delay_ms(int ms) {
+  57   1          unsigned int i;
+  58   1          char j;
+  59   1          for (i = 0; i < ms; i++) {
+  60   2              for (j = 0; j < 50; j++);
+  61   2          }
+  62   1      }
+  63          
+  64          //初始化計時器
+  65          void time_initial(void) {
+  66   1          TMOD = 0x11;  // Set Timer 1 to  mode 0 & Timer 0 mode 1. (16-bit timer)
+  67   1          IE|=0x02; //開啟計時器中斷功能
+  68   1          temp = 65536 - dutytime; //設定中斷一次的時間(預設是dutytime)
+  69   1          TH0 = temp / 256; //填入高八位
+  70   1          TL0 = temp % 256; //填入低八位
+  71   1          TH1 = (65536-1000) / 256;   // Load initial higher 8 bits into Timer 1
+  72   1          TL1 = (65536-1000) % 256;   // Load initial lower 8 bits into Timer 1
+  73   1          EA = 1;                // Enable all interrupt
+  74   1          ET0 = 1;            // Enable Timer 0 interrupt
+  75   1          TR0 = 1;            // Start Timer 0
+  76   1          ET1 = 1;            // Enable Timer 1 interrupt
+  77   1          TR1 = 1;             // Start Timer 1
+  78   1      }
+  79          
+  80          void timer0_isr(void) interrupt TF0_VECTOR using 1 //使用計時器中斷副程式產生PWM
+  81          {
+  82   1          if (PWM_state == 1) {
+  83   2              temp = 65536 - toff;
+  84   2              TH0 = temp / 256;
+  85   2              TL0 = temp % 256;
+  86   2              if (Action == 1) {
+  87   3                  P2_7 = 0;
+  88   3              } else if (Action == 2) {
+  89   3                  P2_6 = 0;
+  90   3              }
+  91   2              PWM_state = 0;
+  92   2              P1 = 0x0f;
+  93   2          } else {
+  94   2              temp = 65536 - ton;
+  95   2              TH0 = temp / 256;
+  96   2              TL0 = temp % 256;
+  97   2              if (Action == 1) {
+  98   3                  P2_7 = 1;
+  99   3              } else if (Action == 2) {
+ 100   3                  P2_6 = 1;
+ 101   3              }
+ 102   2              PWM_state = 1;
+ 103   2              P1 = 0xf0;
+ 104   2          }
+ 105   1      }
+ 106          
+ 107          void time_count_add(void) interrupt 3
+ 108          {   // 10ms
+ 109   1          TH1 = (65536 - 10000) / 256;
+ 110   1          TL1 = (65536 - 10000) % 256; 
+ 111   1          time_count++;
+ 112   1          if (time_count == 100) {
+ 113   2              time_count = 0;
+ 114   2              if (++T_sec == 60) {
+ 115   3                  T_sec = 0;
+ 116   3                  if (++T_min == 60) {
+C51 COMPILER V9.60.0.0   MAIN                                                              01/22/2022 13:17:02 PAGE 3   
 
- 117   4                      if (++T_hour == 24) {
- 118   5                          T_hour = 0;
- 119   5                      }
- 120   4                  }
- 121   3              }
- 122   2          }
- 123   1      }
- 124          
- 125          // 1: open, 2: close
- 126          void server_action(int act) {
- 127   1          Action = act;
- 128   1          ton = 2100; //2.2ms 左轉
- 129   1          delay_ms(1000);
- 130   1          ton = 1500;
- 131   1      }
- 132          
- 133          void main(void) {
- 134   1          char prebtn0 = 0, prebtn1 = 0, prebtn2 = 0, prebtn3 = 0;
- 135   1          char mode2_change_place = 0;
- 136   1          char open_close_time[6] = {0, 0, 0, 0, 0, 0}; //open: Hour, Minute, Second. close: Hour, Minute, Secon
+ 117   4                      T_min = 0;
+ 118   4                      if (++T_hour == 24) {
+ 119   5                          T_hour = 0;
+ 120   5                      }
+ 121   4                  }
+ 122   3              }
+ 123   2          }
+ 124   1      }
+ 125          
+ 126          // 1: open, 2: close
+ 127          void server_action(int act) {
+ 128   1          Action = act;
+ 129   1          if (act == 1) {
+ 130   2              ton = 2100; //2.2ms 左轉
+ 131   2              delay_ms(1000);
+ 132   2              ton = 1200;
+ 133   2          } else {
+ 134   2              ton = 1200;
+ 135   2              delay_ms(1000);
+ 136   2              ton = 2100;
+ 137   2          }
+ 138   1          
+ 139   1      }
+ 140          
+ 141          void main(void) {
+ 142   1          char prebtn0 = 0, prebtn1 = 0, prebtn2 = 0, prebtn3 = 0;
+ 143   1          char mode2_change_place = 0;
+ 144   1          char open_close_time[6] = {0, 0, 0, 0, 0, 0}; //open: Hour, Minute, Second. close: Hour, Minute, Secon
              -d.
- 137   1          char mode = 1;
- 138   1          INT0 = 1; INT1 = 1; P2_0 = 1; P2_1 = 1;
- 139   1          P1 = 0x0f;
- 140   1          ton = 1500;
- 141   1          toff = 30000 - 1500;
- 142   1          SSD_Initial();
- 143   1          time_initial();//呼叫計時器初始化副程式
- 144   1          //主程式中可直接改變ton或toff即可改變高電位跟低電位佔的比例
- 145   1          while (1) {
- 146   2              if (INT0 == 0 && prebtn0 == 1) {
- 147   3                  delay_ms(10);
- 148   3                  if (INT0 == 0) {
- 149   4                      if (mode == 1) { // 開燈
- 150   5                          server_action(1);
- 151   5                      } else if (mode == 2) {
- 152   5                          switch(mode2_change_place) {
- 153   6                              case 0:
- 154   6                              case 3:
- 155   6                                  if (++open_close_time[mode2_change_place] == 24) {
- 156   7                                      open_close_time[mode2_change_place] = 0;
- 157   7                                  }
- 158   6                                  break;
- 159   6                              default:
- 160   6                                  if (++open_close_time[mode2_change_place] == 60) {
- 161   7                                      open_close_time[mode2_change_place] = 0;
- 162   7                                  }
- 163   6                          }
- 164   5                      } else if (mode == 3) {
- 165   5      
- 166   5                      }
- 167   4                  }
- 168   3              }
- 169   2              if (INT1 == 0 && prebtn1 == 1) {
- 170   3                  delay_ms(10);
- 171   3                  if (INT1 == 0) {
- 172   4                      if (mode == 1) {
- 173   5                          server_action(2);
- 174   5                      } else if (mode == 2) {
- 175   5                          switch(mode2_change_place) {
+ 145   1          char mode = 1;
+ 146   1          char i;
+ 147   1          INT0 = 1; INT1 = 1; P2_0 = 1; P2_1 = 1;
+ 148   1          P1 = 0x0f;
+ 149   1          ton = 1500;
+ 150   1          toff = 30000 - 1500;
+ 151   1          SSD_Initial();
+ 152   1          time_initial();
+ 153   1          while (1) {
+ 154   2              if (INT0 == 0 && prebtn0 == 1) {
+ 155   3                  delay_ms(10);
+ 156   3                  if (INT0 == 0) {
+ 157   4                      if (mode == 1) { // 開燈
+ 158   5                          server_action(1);
+ 159   5                      } else if (mode == 2) {
+ 160   5                          switch(mode2_change_place) {
+ 161   6                              case 0:
+ 162   6                              case 3:
+ 163   6                                  if (++open_close_time[mode2_change_place] == 24) {
+ 164   7                                      open_close_time[mode2_change_place] = 0;
+ 165   7                                  }
+ 166   6                                  break;
+ 167   6                              default:
+ 168   6                                  if (++open_close_time[mode2_change_place] == 60) {
+ 169   7                                      open_close_time[mode2_change_place] = 0;
+ 170   7                                  }
+ 171   6                          }
+ 172   5                      } else if (mode == 3) {
+ 173   5      
+ 174   5                      } else if (mode == 4) {
+ 175   5                          switch (change_time) {
  176   6                              case 0:
- 177   6                              case 3:
-C51 COMPILER V9.60.0.0   MAIN                                                              01/20/2022 20:09:26 PAGE 4   
+ 177   6                                  if (++T_hour >= 24) {
+C51 COMPILER V9.60.0.0   MAIN                                                              01/22/2022 13:17:02 PAGE 4   
 
- 178   6                                  if (--open_close_time[mode2_change_place] <= 0) {
- 179   7                                      open_close_time[mode2_change_place] = 23;
- 180   7                                  }
- 181   6                                  break;
- 182   6                              default:
- 183   6                                  if (--open_close_time[mode2_change_place] <= 0) {
- 184   7                                      open_close_time[mode2_change_place] = 59;
- 185   7                                  }
- 186   6                          }
- 187   5                      } else if (mode == 3) {
- 188   5                          
- 189   5                      }
- 190   4                  }
- 191   3              }
- 192   2              if (P2_0 == 0 && prebtn2 == 1) {
- 193   3                  delay_ms(10);
- 194   3                  if (P2_0 == 0) {
- 195   4                      if (mode == 1) {
- 196   5                          mode = 2;
- 197   5                      } else if (mode == 2) {
- 198   5                          mode = 3;
- 199   5                      } else if (mode == 3) {
- 200   5                          mode = 1;
- 201   5                      }
- 202   4                  }
- 203   3              }
- 204   2              if (P2_1 == 0 && prebtn3 == 1) {
- 205   3                  delay_ms(10);
- 206   3                  if (P2_1 == 0) {
- 207   4                      if (mode == 1) {
- 208   5      
- 209   5                      } else if (mode == 2) {
- 210   5                          if (++mode2_change_place == 6) {
- 211   6                              mode2_change_place = 0;
- 212   6                          }
- 213   5                      } else if (mode == 3) {
- 214   5                          
- 215   5                      }
- 216   4                  }
- 217   3              }
- 218   2      
- 219   2      
- 220   2              if (mode == 1) { // 一般模式
- 221   3                  Write7219(8, Action);
- 222   3                  Write7219(7, 0x0f);
- 223   3                  Write7219(6, 0x0f);
- 224   3                  Write7219(5, 0x0f);
- 225   3                  Write7219(4, 0x0f);
- 226   3                  Write7219(3, 0x0f);
- 227   3                  Write7219(2, 0x0f);
- 228   3                  Write7219(1, 1);
- 229   3              } else if (mode == 2) { // 設定自動時間模式
- 230   3                  if (mode2_change_place < 3) {
- 231   4                      if (mode2_change_place == 0) {
- 232   5                          if (time_count >= 50) {
- 233   6                              Write7219(8, open_close_time[0] / 10);
- 234   6                              Write7219(7, open_close_time[0] % 10); 
- 235   6                          } else {
- 236   6                              Write7219(8, 0x0f);
- 237   6                              Write7219(7, 0x0f); 
- 238   6                          }
- 239   5                          Write7219(6, open_close_time[1] / 10);
-C51 COMPILER V9.60.0.0   MAIN                                                              01/20/2022 20:09:26 PAGE 5   
+ 178   7                                      T_hour = 0;
+ 179   7                                  }
+ 180   6                                  break;
+ 181   6                              case 1:
+ 182   6                                  if (++T_min >= 60) {
+ 183   7                                      T_min = 0;
+ 184   7                                  }
+ 185   6                                  break;
+ 186   6                              case 2:
+ 187   6                                  if (++T_sec >= 60) {
+ 188   7                                      T_sec = 0;
+ 189   7                                  }
+ 190   6                          }
+ 191   5                      }
+ 192   4                  }
+ 193   3              }
+ 194   2              if (INT1 == 0 && prebtn1 == 1) {
+ 195   3                  delay_ms(10);
+ 196   3                  if (INT1 == 0) {
+ 197   4                      if (mode == 1) {
+ 198   5                          server_action(2);
+ 199   5                      } else if (mode == 2) {
+ 200   5                          switch(mode2_change_place) {
+ 201   6                              case 0:
+ 202   6                              case 3:
+ 203   6                                  if (--open_close_time[mode2_change_place] <= 0) {
+ 204   7                                      open_close_time[mode2_change_place] = 23;
+ 205   7                                  }
+ 206   6                                  break;
+ 207   6                              default:
+ 208   6                                  if (--open_close_time[mode2_change_place] <= 0) {
+ 209   7                                      open_close_time[mode2_change_place] = 59;
+ 210   7                                  }
+ 211   6                          }
+ 212   5                      } else if (mode == 3) {
+ 213   5                          
+ 214   5                      } else if (mode == 4) {
+ 215   5                          switch (change_time) {
+ 216   6                              case 0:
+ 217   6                                  if (--T_hour <= 0) {
+ 218   7                                      T_hour = 23;
+ 219   7                                  }
+ 220   6                                  break;
+ 221   6                              case 1:
+ 222   6                                  if (++T_min <= 0) {
+ 223   7                                      T_min = 59;
+ 224   7                                  }
+ 225   6                                  break;
+ 226   6                              case 2:
+ 227   6                                  if (++T_sec <= 0) {
+ 228   7                                      T_sec = 59;
+ 229   7                                  }
+ 230   6                          }
+ 231   5                      }
+ 232   4                  }
+ 233   3              }
+ 234   2              if (P2_0 == 0 && prebtn2 == 1) {
+ 235   3                  delay_ms(10);
+ 236   3                  if (P2_0 == 0) {
+ 237   4                      if (mode == 1) {
+ 238   5                          mode = 2;
+ 239   5                      } else if (mode == 2) {
+C51 COMPILER V9.60.0.0   MAIN                                                              01/22/2022 13:17:02 PAGE 5   
 
- 240   5                          Write7219(5, open_close_time[1] % 10);
- 241   5                          Write7219(4, open_close_time[2] / 10);
- 242   5                          Write7219(3, open_close_time[2] % 10);
- 243   5                      } else if (mode2_change_place == 1) {
- 244   5                          if (time_count >= 50) {
- 245   6                              Write7219(6, open_close_time[1] / 10);
- 246   6                              Write7219(5, open_close_time[1] % 10);
- 247   6                          } else {
- 248   6                              Write7219(6, 0x0f);
- 249   6                              Write7219(5, 0x0f); 
- 250   6                          }
- 251   5                          Write7219(8, open_close_time[0] / 10);
- 252   5                          Write7219(7, open_close_time[0] % 10); 
- 253   5                          Write7219(4, open_close_time[2] / 10);
- 254   5                          Write7219(3, open_close_time[2] % 10);
- 255   5                      } else if (mode2_change_place == 2) {
- 256   5                          if (time_count >= 50) {
- 257   6                              Write7219(4, open_close_time[2] / 10);
- 258   6                              Write7219(3, open_close_time[2] % 10);
- 259   6                          } else {
- 260   6                              Write7219(4, 0x0f);
- 261   6                              Write7219(3, 0x0f); 
+ 240   5                          mode = 3;
+ 241   5                      } else if (mode == 3) {
+ 242   5                          mode = 4;
+ 243   5                      } else if (mode == 4) {
+ 244   5                          mode = 1;
+ 245   5                      }
+ 246   4                  }
+ 247   3              }
+ 248   2              if (P2_1 == 0 && prebtn3 == 1) {
+ 249   3                  delay_ms(10);
+ 250   3                  if (P2_1 == 0) {
+ 251   4                      if (mode == 1) {
+ 252   5      
+ 253   5                      } else if (mode == 2) {
+ 254   5                          if (++mode2_change_place == 6) {
+ 255   6                              mode2_change_place = 0;
+ 256   6                          }
+ 257   5                      } else if (mode == 3) {
+ 258   5                          
+ 259   5                      } else if (mode == 4) {
+ 260   5                          if (++change_time == 3) {
+ 261   6                              change_time = 0;
  262   6                          }
- 263   5                          Write7219(6, open_close_time[1] / 10);
- 264   5                          Write7219(5, open_close_time[1] % 10);
- 265   5                          Write7219(8, open_close_time[0] / 10);
- 266   5                          Write7219(7, open_close_time[0] % 10); 
- 267   5                      }
- 268   4                      Write7219(2, 1);
- 269   4                  } else {
- 270   4                      if (mode2_change_place == 3) {
- 271   5                          if (time_count >= 50) {
- 272   6                              Write7219(8, open_close_time[3] / 10);
- 273   6                              Write7219(7, open_close_time[3] % 10); 
- 274   6                          } else {
- 275   6                              Write7219(8, 0x0f);
- 276   6                              Write7219(7, 0x0f); 
- 277   6                          }
- 278   5                          Write7219(6, open_close_time[4] / 10);
- 279   5                          Write7219(5, open_close_time[4] % 10);
- 280   5                          Write7219(4, open_close_time[5] / 10);
- 281   5                          Write7219(3, open_close_time[5] % 10);
- 282   5                      } else if (mode2_change_place == 4) {
- 283   5                          if (time_count >= 50) {
- 284   6                              Write7219(6, open_close_time[4] / 10);
- 285   6                              Write7219(5, open_close_time[4] % 10);
- 286   6                          } else {
- 287   6                              Write7219(6, 0x0f);
- 288   6                              Write7219(5, 0x0f); 
- 289   6                          }
- 290   5                          Write7219(8, open_close_time[3] / 10);
- 291   5                          Write7219(7, open_close_time[3] % 10); 
- 292   5                          Write7219(4, open_close_time[5] / 10);
- 293   5                          Write7219(3, open_close_time[5] % 10);
- 294   5                      } else if (mode2_change_place == 5) {
- 295   5                          if (time_count >= 50) {
- 296   6                              Write7219(4, open_close_time[5] / 10);
- 297   6                              Write7219(3, open_close_time[5] % 10);
- 298   6                          } else {
- 299   6                              Write7219(4, 0x0f);
- 300   6                              Write7219(3, 0x0f); 
- 301   6                          }
-C51 COMPILER V9.60.0.0   MAIN                                                              01/20/2022 20:09:26 PAGE 6   
+ 263   5                      }
+ 264   4                  }
+ 265   3              }
+ 266   2      
+ 267   2      
+ 268   2              if (mode == 1) { // 一般模式
+ 269   3                  for (i = 0; i <= 8; i++) {
+ 270   4                      Write7219(i, 0x0f);
+ 271   4                  }
+ 272   3                  Write7219(1, 1);
+ 273   3              } else if (mode == 2) { // 設定自動時間模式
+ 274   3                  if (mode2_change_place < 3) {
+ 275   4                      if (mode2_change_place == 0) {
+ 276   5                          if (time_count >= 50) {
+ 277   6                              Write7219(8, open_close_time[0] / 10);
+ 278   6                              Write7219(7, open_close_time[0] % 10); 
+ 279   6                          } else {
+ 280   6                              Write7219(8, 0x0f);
+ 281   6                              Write7219(7, 0x0f); 
+ 282   6                          }
+ 283   5                          Write7219(6, open_close_time[1] / 10);
+ 284   5                          Write7219(5, open_close_time[1] % 10);
+ 285   5                          Write7219(4, open_close_time[2] / 10);
+ 286   5                          Write7219(3, open_close_time[2] % 10);
+ 287   5                      } else if (mode2_change_place == 1) {
+ 288   5                          if (time_count >= 50) {
+ 289   6                              Write7219(6, open_close_time[1] / 10);
+ 290   6                              Write7219(5, open_close_time[1] % 10);
+ 291   6                          } else {
+ 292   6                              Write7219(6, 0x0f);
+ 293   6                              Write7219(5, 0x0f); 
+ 294   6                          }
+ 295   5                          Write7219(8, open_close_time[0] / 10);
+ 296   5                          Write7219(7, open_close_time[0] % 10); 
+ 297   5                          Write7219(4, open_close_time[2] / 10);
+ 298   5                          Write7219(3, open_close_time[2] % 10);
+ 299   5                      } else if (mode2_change_place == 2) {
+ 300   5                          if (time_count >= 50) {
+ 301   6                              Write7219(4, open_close_time[2] / 10);
+C51 COMPILER V9.60.0.0   MAIN                                                              01/22/2022 13:17:02 PAGE 6   
 
- 302   5                          Write7219(5, open_close_time[4] % 10);
- 303   5                          Write7219(6, open_close_time[4] / 10);
- 304   5                          Write7219(7, open_close_time[3] % 10); 
- 305   5                          Write7219(8, open_close_time[3] / 10);
- 306   5                      }
- 307   4                      Write7219(2, 2);
- 308   4                  }
- 309   3                  Write7219(1, 2);
- 310   3              } else if (mode == 3) {
- 311   3                  Write7219(8, T_hour / 10);
- 312   3                  Write7219(7, T_hour % 10);
- 313   3                  Write7219(6, T_min / 10);
- 314   3                  Write7219(5, T_min % 10);
- 315   3                  Write7219(4, T_sec / 10);
- 316   3                  Write7219(3, T_sec % 10);
- 317   3                  Write7219(2, 0x0f);
- 318   3                  Write7219(1, 3);
- 319   3              }
- 320   2      
- 321   2              // if (P2_0 == 0) {
- 322   2              //     ton = 1200; //0.9ms 右轉  千萬別以為就3個角度0.5~2.2之間都可調角度
- 323   2              //     P1 = 0x03;
- 324   2              // }
- 325   2      
- 326   2              // if (P2_1 == 0) {
- 327   2              //     ton = 900; //0.9ms 右轉  千萬別以為就3個角度0.5~2.2之間都可調角度
- 328   2              //     P1 = 0x04;
- 329   2              // }
- 330   2      
- 331   2              toff = 30000 - ton;
- 332   2              prebtn0 = INT0;
- 333   2              prebtn1 = INT1;
- 334   2              prebtn2 = P2_0;
- 335   2              prebtn3 = P2_1;
- 336   2              delay_ms(20);
- 337   2              // P1 = prebtn0 + prebtn1 * 2 + prebtn2 * 4 + prebtn3 * 8 + 0xf0;
- 338   2          }
- 339   1      }
+ 302   6                              Write7219(3, open_close_time[2] % 10);
+ 303   6                          } else {
+ 304   6                              Write7219(4, 0x0f);
+ 305   6                              Write7219(3, 0x0f); 
+ 306   6                          }
+ 307   5                          Write7219(6, open_close_time[1] / 10);
+ 308   5                          Write7219(5, open_close_time[1] % 10);
+ 309   5                          Write7219(8, open_close_time[0] / 10);
+ 310   5                          Write7219(7, open_close_time[0] % 10); 
+ 311   5                      }
+ 312   4                      Write7219(2, 1);
+ 313   4                  } else {
+ 314   4                      if (mode2_change_place == 3) {
+ 315   5                          if (time_count >= 50) {
+ 316   6                              Write7219(8, open_close_time[3] / 10);
+ 317   6                              Write7219(7, open_close_time[3] % 10); 
+ 318   6                          } else {
+ 319   6                              Write7219(8, 0x0f);
+ 320   6                              Write7219(7, 0x0f); 
+ 321   6                          }
+ 322   5                          Write7219(6, open_close_time[4] / 10);
+ 323   5                          Write7219(5, open_close_time[4] % 10);
+ 324   5                          Write7219(4, open_close_time[5] / 10);
+ 325   5                          Write7219(3, open_close_time[5] % 10);
+ 326   5                      } else if (mode2_change_place == 4) {
+ 327   5                          if (time_count >= 50) {
+ 328   6                              Write7219(6, open_close_time[4] / 10);
+ 329   6                              Write7219(5, open_close_time[4] % 10);
+ 330   6                          } else {
+ 331   6                              Write7219(6, 0x0f);
+ 332   6                              Write7219(5, 0x0f); 
+ 333   6                          }
+ 334   5                          Write7219(8, open_close_time[3] / 10);
+ 335   5                          Write7219(7, open_close_time[3] % 10); 
+ 336   5                          Write7219(4, open_close_time[5] / 10);
+ 337   5                          Write7219(3, open_close_time[5] % 10);
+ 338   5                      } else if (mode2_change_place == 5) {
+ 339   5                          if (time_count >= 50) {
+ 340   6                              Write7219(4, open_close_time[5] / 10);
+ 341   6                              Write7219(3, open_close_time[5] % 10);
+ 342   6                          } else {
+ 343   6                              Write7219(4, 0x0f);
+ 344   6                              Write7219(3, 0x0f); 
+ 345   6                          }
+ 346   5                          Write7219(5, open_close_time[4] % 10);
+ 347   5                          Write7219(6, open_close_time[4] / 10);
+ 348   5                          Write7219(7, open_close_time[3] % 10); 
+ 349   5                          Write7219(8, open_close_time[3] / 10);
+ 350   5                      }
+ 351   4                      Write7219(2, 2);
+ 352   4                  }
+ 353   3                  Write7219(1, 2);
+ 354   3                  if (open_close_time[0] == T_hour && open_close_time[1] == T_min && open_close_time[2] == T_sec
+             -) {
+ 355   4                      server_action(1);
+ 356   4                  } else if (open_close_time[3] == T_hour && open_close_time[4] == T_min && open_close_time[5] =
+             -= T_sec) {
+ 357   4                      server_action(2);
+ 358   4                  }
+ 359   3              } else if (mode == 3 || mode == 4) { // 顯示當前時間
+ 360   3                  Write7219(8, T_hour / 10);
+ 361   3                  Write7219(7, T_hour % 10);
+C51 COMPILER V9.60.0.0   MAIN                                                              01/22/2022 13:17:02 PAGE 7   
+
+ 362   3                  Write7219(6, T_min / 10);
+ 363   3                  Write7219(5, T_min % 10);
+ 364   3                  Write7219(4, T_sec / 10);
+ 365   3                  Write7219(3, T_sec % 10);
+ 366   3                  if (mode == 3) Write7219(2, 0x0f);
+ 367   3                  else Write7219(2, 0x7E);
+ 368   3                  Write7219(1, 3);
+ 369   3              }
+ 370   2      
+ 371   2              toff = 30000 - ton;
+ 372   2              prebtn0 = INT0;
+ 373   2              prebtn1 = INT1;
+ 374   2              prebtn2 = P2_0;
+ 375   2              prebtn3 = P2_1;
+ 376   2              delay_ms(20);
+ 377   2              // P1 = prebtn0 + prebtn1 * 2 + prebtn2 * 4 + prebtn3 * 8 + 0xf0;
+ 378   2          }
+ 379   1      }
 
 
 MODULE INFORMATION:   STATIC OVERLAYABLE
-   CODE SIZE        =   1730    ----
+   CODE SIZE        =   2037    ----
    CONSTANT SIZE    =      6    ----
    XDATA SIZE       =   ----    ----
    PDATA SIZE       =   ----    ----
-   DATA SIZE        =     15      12
+   DATA SIZE        =     16      12
    IDATA SIZE       =   ----    ----
    BIT SIZE         =   ----    ----
 END OF MODULE INFORMATION.
